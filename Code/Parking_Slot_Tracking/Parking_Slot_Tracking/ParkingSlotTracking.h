@@ -3,7 +3,7 @@
 
 #pragma once
 
-typedef enum { ERR_NONE = 0, ERR_INIT, ERR_INPUT, ERR_PREDICT, ERR_MEAS_UPT } eOGF_Error_type;
+typedef enum { ERR_NONE = 0, ERR_INIT, ERR_ESTIMATE, ERR_CROP,  ERR_CALDT, ERR_PREDICT} eOGF_Error_type;
 
 class CParkingSlotTracking
 {
@@ -17,8 +17,9 @@ public:
 
 public:
 	// Task
-	bool Init(); // initialization
-	void Run(bool trackingFlag, cv::Mat img_src, std::vector<cv::Point>pt_list, double yaw_rate, double speed, double dt);
+	void Init(); // initialization
+	void Run(bool trackingFlag, cv::Mat img_src, std::vector<cv::Point>pt_list, double yaw_rate, double speed, double dt, std::vector<cv::Point>& pt_list_filtered);
+	bool CParkingSlotTracking::predictPosition(std::vector<cv::Point>pt_list, double yaw_rate, double speed, double dt, std::vector<cv::Point>& pt_list_dst);
 	void Terminate(); // termination
 	// ===========================================================================
 
@@ -30,23 +31,44 @@ private:
 	// Constant
 	eOGF_Error_type				m_eErrorCode;
 	bool						templateflag;
-	double						XPixelMeter;
+	double						m_XPixelMeter;
+	std::vector<cv::Point>		pt_list_predicted;
+	std::vector<cv::Point>		pt_list_estimated;
+	std::vector<cv::Point>		pt_list_corrected;
+	std::vector<cv::Point>		pt_list_tracking;
+	cv::Mat						img_cropped_template;
+	std::vector<cv::Mat>		img_DT_template;
+	int							m_VehicleCenterX;
+	int							m_VehicleCenterY;
+	int							m_CropImageSizeX;
+	int							m_CropImageSizeY;
+	double						m_ResizeScale;
+	int							m_ThresholdImage;
+	int							m_disturbanceX;
+	int							m_disturbanceY;
+	int							m_disturbanceANG;
+
 	// ===========================================================================
 
 private:
 	// ===========================================================================
 	// Internal functions
 	// ---------------------------------------------------------------------------
-	bool predictPosition(std::vector<cv::Point>pt_list, std::vector<cv::Point>& pt_list_dst);
-	bool estimateSpace(std::vector<cv::Point> pt_list, std::vector<cv::Point> pt_list_dst);
-	bool CParkingSlotTracking::cropImage(cv::Mat img_src, cv::Mat& img_dst, std::vector<cv::Point> pt_list);
-	bool CParkingSlotTracking::calculateDT(cv::Mat img_cropped, std::vector<cv::Mat>& img_dst);
+	
+	bool CParkingSlotTracking::estimateSpace(std::vector<cv::Point> pt_list, std::vector<cv::Point>& pt_list_estimated);
+	bool CParkingSlotTracking::cropImage(cv::Mat img_src_ss, cv::Mat& img_cropped, std::vector<cv::Point> pt_list_estimated);	
+	bool CParkingSlotTracking::calculateDT(cv::Mat img_cropped, std::vector<cv::Mat>& img_DT);
+	bool CParkingSlotTracking::getDisturbancePoints(std::vector<cv::Point> pt_list_predicted, std::vector<cv::Point>& pt_list_disturbance, int x_disturbance, int y_disturbance, int ang_disturbance);
+	bool CParkingSlotTracking::correctPosition(std::vector<cv::Point> pt_list_src, std::vector<cv::Point> pt_list_predicted, cv::Mat img_src_ss, std::vector<cv::Mat> img_template_DT, std::vector<cv::Point>& pt_list_corrected);
+	bool CParkingSlotTracking::KalmanFiltering(std::vector<cv::Point> pt_list_corrected, std::vector<cv::Point>& pt_list_filtered);
+
 	// ===========================================================================
 
 public:
 	// ===========================================================================
 	// External interfaces
 	// ---------------------------------------------------------------------------
-
+	std::vector<cv::Point> getCornerpoint(void);
+	void asdt();
 	// ===========================================================================
 };
