@@ -33,35 +33,43 @@ void CParkingSlotTracking::Init()
 {
 	m_XPixelMeter = 0.02469961956;
 
-	m_VehicleCenterX = 245;
-	m_VehicleCenterY = 118;
+	m_VehicleCenterX = 245.;
+	m_VehicleCenterY = 118.;
 }
 
-void CParkingSlotTracking::Run(bool trackingFlag, cv::Mat img_src, std::vector<cv::Point>pt_list, double yaw_rate, double speed, double dt, std::vector<cv::Point>& pt_list_filtered)
+void CParkingSlotTracking::Run(bool trackingFlag, cv::Mat img_src, std::vector<cv::Point2d>pt_list, double yaw_rate, double speed, double dt, std::vector<cv::Point2d>& pt_list_filtered)
 {
 	if (trackingFlag == true){
 		if (templateflag == true){
-			if (!estimateSpace(pt_list, pt_list_estimated)) m_eErrorCode = ERR_ESTIMATE;
-			else if (!cropImage(img_src, img_cropped_template, pt_list_estimated)) m_eErrorCode = ERR_CROP;
+			if (!estimateSpace(pt_list, m_pt_list_estimated)) m_eErrorCode = ERR_ESTIMATE;
+			else if (!cropImage(img_src, img_cropped_template, m_pt_list_estimated)) m_eErrorCode = ERR_CROP;
 			else if (!calculateDT(img_cropped_template, img_DT_template)) m_eErrorCode = ERR_CALDT;
-			pt_list_tracking = pt_list;
+
+			m_pt_list_tracking.clear();
+			m_pt_list_tracking.push_back(pt_list[0]);
+			m_pt_list_tracking.push_back(pt_list[1]);
+
 			templateflag = false;
 		}
 		else{
-			if (!predictPosition(pt_list_tracking, yaw_rate, speed, dt, pt_list_predicted)) m_eErrorCode = ERR_PREDICT;
-			else if (!estimateSpace(pt_list_predicted, pt_list_estimated)) m_eErrorCode = ERR_ESTIMATE;
+			if (!predictPosition(m_pt_list_tracking, yaw_rate, speed, dt, m_pt_list_predicted)) m_eErrorCode = ERR_PREDICT;
+			else if (!estimateSpace(m_pt_list_predicted, m_pt_list_estimated)) m_eErrorCode = ERR_ESTIMATE;
 
-			if (!correctPosition(pt_list_estimated, pt_list_predicted, img_src, img_DT_template, pt_list_corrected)){
-				pt_list_tracking = pt_list_corrected;
+			if (!correctPosition(m_pt_list_estimated, m_pt_list_predicted, img_src, img_DT_template, m_pt_list_corrected)){
+				m_pt_list_tracking.clear();
+				m_pt_list_tracking.push_back(m_pt_list_corrected[0]);
+				m_pt_list_tracking.push_back(m_pt_list_corrected[1]);
 			}
 			else{
-				pt_list_tracking = pt_list_predicted;
+				m_pt_list_tracking.clear();
+				m_pt_list_tracking.push_back(m_pt_list_predicted[0]);
+				m_pt_list_tracking.push_back(m_pt_list_predicted[1]);
 			}
 		}
 	}
 	else{
-		if (!predictPosition(pt_list_tracking, yaw_rate, speed, dt, pt_list_predicted)){
-			pt_list_tracking = pt_list_predicted;
+		if (!predictPosition(m_pt_list_tracking, yaw_rate, speed, dt, m_pt_list_predicted)){
+			m_pt_list_tracking = m_pt_list_predicted;
 		}
 	}
 }
@@ -74,7 +82,7 @@ void CParkingSlotTracking::Terminate()
 // Internal functions
 // ---------------------------------------------------------------------------
 // Initialization
-bool CParkingSlotTracking::predictPosition(std::vector<cv::Point>pt_list,double yaw_rate, double speed, double dt, std::vector<cv::Point>& pt_list_dst){
+bool CParkingSlotTracking::predictPosition(std::vector<cv::Point2d>pt_list, double yaw_rate, double speed, double dt, std::vector<cv::Point2d>& pt_list_dst){
 
 	if (m_eErrorCode != ERR_NONE) return false;
 
@@ -82,36 +90,32 @@ bool CParkingSlotTracking::predictPosition(std::vector<cv::Point>pt_list,double 
 	double delta_yaw = yaw_rate * dt / 180. * M_PI;
 
 	pt_list_dst.clear();
-
 	for (int idx_points = 0; idx_points < pt_list.size(); idx_points++){
 		// translation
 		double moved_x = (double)pt_list[idx_points].x + delta_distance;
 
-		// rotation
-		double tmp_x = moved_x - (double)m_VehicleCenterX;
-		double tmp_y = (double)pt_list[idx_points].y - (double)m_VehicleCenterY;
+		// rotation & translation
+		double tmp_x = moved_x - m_VehicleCenterX;
+		double tmp_y = pt_list[idx_points].y - m_VehicleCenterY;
 
-		double rot_x = cos(delta_yaw) * tmp_x - sin(delta_yaw) * tmp_y;
-		double rot_y = sin(delta_yaw) * tmp_x + cos(delta_yaw) * tmp_y;
+		double rot_x = cos(delta_yaw) * tmp_x - sin(delta_yaw) * tmp_y + m_VehicleCenterX;
+		double rot_y = sin(delta_yaw) * tmp_x + cos(delta_yaw) * tmp_y + m_VehicleCenterY;
 
-		rot_x = rot_x + (double)m_VehicleCenterX;
-		rot_y = rot_y + (double)m_VehicleCenterY;
-
-		cv::Point dst_points;
-		dst_points.x = (int)rot_x;
-		dst_points.y = (int)rot_y;
+		cv::Point2d dst_points;
+		dst_points.x = rot_x;
+		dst_points.y = rot_y;
 
 		pt_list_dst.push_back(dst_points);
 	}
 	return true;
 }
-bool CParkingSlotTracking::estimateSpace(std::vector<cv::Point> pt_list, std::vector<cv::Point>& pt_list_estimated){
+bool CParkingSlotTracking::estimateSpace(std::vector<cv::Point2d> pt_list, std::vector<cv::Point2d>& pt_list_estimated){
 	if (pt_list.size() < 2){
 		return false;
 	}
 	
 	// arrange pt_list
-	cv::Point tmp_pt_list;
+	cv::Point2d tmp_pt_list;
 	if (pt_list[0].x > pt_list[1].x){
 		tmp_pt_list = pt_list[0];
 		pt_list[0] = pt_list[1];
@@ -139,14 +143,14 @@ bool CParkingSlotTracking::estimateSpace(std::vector<cv::Point> pt_list, std::ve
 	double rot_x = cos(ang) * unit_x - sin(ang) * unit_y;
 	double rot_y = sin(ang) * unit_x + cos(ang) * unit_y;
 
-	cv::Point tmp_pt_list1, tmp_pt_list2;
+	cv::Point2d tmp_pt_list1, tmp_pt_list2;
 	tmp_pt_list1.x = (int)(pt_list[0].x - areaboundary * unit_x);
 	tmp_pt_list1.y = (int)(pt_list[0].y - areaboundary * unit_y);
 	tmp_pt_list2.x = (int)(pt_list[1].x + areaboundary * unit_x);
 	tmp_pt_list2.y = (int)(pt_list[1].y + areaboundary * unit_y);
 
 	pt_list_estimated.clear();
-	cv::Point tmp_pt_list3, tmp_pt_list4, tmp_pt_list5, tmp_pt_list6;
+	cv::Point2d tmp_pt_list3, tmp_pt_list4, tmp_pt_list5, tmp_pt_list6;
 	tmp_pt_list3.x = (int)(tmp_pt_list1.x - areaboundary * rot_x);
 	tmp_pt_list3.y = (int)(tmp_pt_list1.y - areaboundary * rot_y);
 	pt_list_estimated.push_back(tmp_pt_list3);
@@ -162,7 +166,7 @@ bool CParkingSlotTracking::estimateSpace(std::vector<cv::Point> pt_list, std::ve
 
 	return true;
 }
-bool CParkingSlotTracking::cropImage(cv::Mat img_src_ss, cv::Mat& img_cropped, std::vector<cv::Point> pt_list_estimated){
+bool CParkingSlotTracking::cropImage(cv::Mat img_src_ss, cv::Mat& img_cropped, std::vector<cv::Point2d> pt_list_estimated){
 	if (m_eErrorCode != ERR_NONE) return false;
 
 	if (templateflag == true){/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -264,10 +268,10 @@ bool CParkingSlotTracking::calculateDT(cv::Mat img_cropped, std::vector<cv::Mat>
 
 	return true;
 }
-bool CParkingSlotTracking::correctPosition(std::vector<cv::Point> pt_list_src, std::vector<cv::Point> pt_list_predicted, cv::Mat img_src_ss, std::vector<cv::Mat> img_template_DT, std::vector<cv::Point>& pt_list_corrected){
+bool CParkingSlotTracking::correctPosition(std::vector<cv::Point2d> pt_list_src, std::vector<cv::Point2d> pt_list_predicted, cv::Mat img_src_ss, std::vector<cv::Mat> img_template_DT, std::vector<cv::Point2d>& pt_list_corrected){
 	
-	int tmp_x[4] = { pt_list_estimated[0].x, pt_list_estimated[1].x, pt_list_estimated[2].x, pt_list_estimated[3].x };
-	int tmp_y[4] = { pt_list_estimated[0].y, pt_list_estimated[1].y, pt_list_estimated[2].y, pt_list_estimated[3].y };
+	int tmp_x[4] = { pt_list_src[0].x, pt_list_src[1].x, pt_list_src[2].x, pt_list_src[3].x };
+	int tmp_y[4] = { pt_list_src[0].y, pt_list_src[1].y, pt_list_src[2].y, pt_list_src[3].y };
 
 	int max_x = *std::max_element(tmp_x, tmp_x + 4);
 	int min_x = *std::min_element(tmp_x, tmp_x + 4);
@@ -282,15 +286,15 @@ bool CParkingSlotTracking::correctPosition(std::vector<cv::Point> pt_list_src, s
 	}
 
 	std::vector<double> arr_cost;
-	std::vector<std::vector<cv::Point>> tmp_point_disturbance;
+	std::vector<std::vector<cv::Point2d>> tmp_point_disturbance;
 	int idx = 0;
 	for (int idx_x = -m_disturbanceX; idx_x <= m_disturbanceX; idx_x++){
 		for (int idx_y = -m_disturbanceY; idx_y <= m_disturbanceY; idx_y++){
 			for (int idx_ang = -m_disturbanceANG; idx_ang <= m_disturbanceANG; idx_ang++){
-				std::vector<cv::Point> pt_list_disturbance;
+				std::vector<cv::Point2d> pt_list_disturbance;
 				getDisturbancePoints(pt_list_predicted, pt_list_disturbance, idx_x, idx_y, idx_ang);
 
-				std::vector<cv::Point> pt_list_disturbance_estimate;
+				std::vector<cv::Point2d> pt_list_disturbance_estimate;
 				estimateSpace(pt_list_disturbance, pt_list_disturbance_estimate);
 
 				cv::Mat img_cropped_disturbance;
@@ -319,7 +323,7 @@ bool CParkingSlotTracking::correctPosition(std::vector<cv::Point> pt_list_src, s
 	
 	return true;
 }
-bool CParkingSlotTracking::getDisturbancePoints(std::vector<cv::Point> pt_list_predicted, std::vector<cv::Point>& pt_list_disturbance, int x_disturbance, int y_disturbance, int ang_disturbance){
+bool CParkingSlotTracking::getDisturbancePoints(std::vector<cv::Point2d> pt_list_predicted, std::vector<cv::Point2d>& pt_list_disturbance, int x_disturbance, int y_disturbance, int ang_disturbance){
 	
 	double ang_dis = ang_disturbance / 180. * M_PI;
 	
@@ -346,10 +350,10 @@ bool CParkingSlotTracking::getDisturbancePoints(std::vector<cv::Point> pt_list_p
 	tmp_point2_x = tmp_rot_point2_x + tmp_point_centerx;
 	tmp_point2_y = tmp_rot_point2_y + tmp_point_centery;
 
-	cv::Point tmp_point1;
+	cv::Point2d tmp_point1;
 	tmp_point1.x = tmp_point1_x;
 	tmp_point1.y = tmp_point1_y;
-	cv::Point tmp_point2;
+	cv::Point2d tmp_point2;
 	tmp_point2.x = tmp_point2_x;
 	tmp_point2.y = tmp_point2_y;
 
@@ -359,7 +363,7 @@ bool CParkingSlotTracking::getDisturbancePoints(std::vector<cv::Point> pt_list_p
 
 	return true;
 }
-bool CParkingSlotTracking::KalmanFiltering(std::vector<cv::Point> pt_list_corrected, std::vector<cv::Point>& pt_list_filtered){
+bool CParkingSlotTracking::KalmanFiltering(std::vector<cv::Point2d> pt_list_corrected, std::vector<cv::Point2d>& pt_list_filtered){
 
 	return true;
 }
@@ -370,8 +374,8 @@ bool CParkingSlotTracking::KalmanFiltering(std::vector<cv::Point> pt_list_correc
 // ===========================================================================
 // External interfaces
 // ---------------------------------------------------------------------------
-std::vector<cv::Point> CParkingSlotTracking::getCornerpoint(void){
-	return pt_list_tracking;
+std::vector<cv::Point2d> CParkingSlotTracking::getCornerpoint(void){
+	return m_pt_list_tracking;
 }
 
 void CParkingSlotTracking::asdt()

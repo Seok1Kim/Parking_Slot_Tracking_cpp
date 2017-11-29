@@ -12,10 +12,11 @@ int start_frame[8] = {107, 63, 96, 82, 50, 111, 81, 100};
 int set_num = 1;
 std::string str_set_num = std::to_string(set_num);
 
-std::vector<cv::Point> pt_list;
-std::vector<cv::Point> pt_list_motion;
-std::vector<cv::Point> pt_list_tracking;
-std::vector<cv::Point> pt_list_corrected;
+std::vector<cv::Point2d> pt_list;
+std::vector<cv::Point2d> pt_list_motion;
+std::vector<cv::Point2d> pt_motion;
+std::vector<cv::Point2d> pt_list_tracking;
+std::vector<cv::Point2d> pt_list_corrected;
 
 bool trackingFlag = false;
 
@@ -24,6 +25,7 @@ typedef struct{
 	double speed;
 	double yawrate;
 }MotionData;
+
 std::vector<MotionData> MotionVec;
 
 void getMousepoint(int event, int x, int y, int flags, void* userdata);
@@ -67,81 +69,91 @@ int main(int argc, char *argv[], char *envp[]){
 	CParkingSlotTracking ParkingSlotTracking;
 	CParkingSlotTracking Motion;
 
+	char image_ss[1000];
+	sprintf_s(image_ss, 1000, "D:/git/Parking_Slot_Tracking_cpp/DB/171124/rectified/set%01d/output/labeled/class_1/%08d.jpg", set_num, frameNum);
+
+	char image_color[1000];
+	sprintf_s(image_color, 1000, "D:/git/Parking_Slot_Tracking_cpp/DB/171124/rectified/set%01d/images/%08d.jpg", set_num, frameNum);
+
+	cv::Mat image_origin = cv::imread(image_color);
+	cv::Mat image_ss_origin = cv::imread(image_ss, 0);
+
+	if (image_origin.data == NULL) {
+		std::cout << "no image data in " << image_ss << std::endl;
+	}
+
 	while (1){
-		char image_ss[1000];
-		sprintf_s(image_ss, 1000, "D:/git/Parking_Slot_Tracking_cpp/DB/171124/rectified/set%01d/output/labeled/class_1/%08d.jpg", set_num, frameNum);
 
-		char image_color[1000];
-		sprintf_s(image_color, 1000, "D:/git/Parking_Slot_Tracking_cpp/DB/171124/rectified/set%01d/images/%08d.jpg", set_num, frameNum);
-	
-		cv::Mat image_origin = cv::imread(image_color);
-		cv::Mat image_ss_origin = cv::imread(image_ss,0);
+		cv::imshow("image", image_origin);
+		cv::waitKey(20);
 
-		if (image_origin.data == NULL) {
-			std::cout << "no image data in " << image_ss << std::endl;
-			break;
-		}
 		if (pt_list.size() != 0){
 			for (unsigned int idx = 0; idx < pt_list.size(); idx++){
 				
 				cv::circle(image_origin, pt_list[idx], 3, cv::Scalar(0, 0, 255), -1);
 				cv::waitKey(10);
-				pt_list_motion = pt_list;
-				pt_list_tracking= pt_list;
+				cv::imshow("image", image_origin);
+				cv::waitKey(20);
 			}
-		}
-
-		cv::imshow("image", image_origin);
-		cv::waitKey(20);
-
-		while (pt_list.size() == 2){
-
-			frameNum += 1;
-
-			char image_ss[1000];
-			sprintf_s(image_ss, 1000, "D:/git/Parking_Slot_Tracking_cpp/DB/171124/rectified/set%01d/output/labeled/class_1/%08d.jpg", set_num, frameNum);
-
-			char image_color[1000];
-			sprintf_s(image_color, 1000, "D:/git/Parking_Slot_Tracking_cpp/DB/171124/rectified/set%01d/images/%08d.jpg", set_num, frameNum);
-
-			cv::Mat image_origin = cv::imread(image_color);
-			cv::Mat image_ss_origin = cv::imread(image_ss, 0);
-
-			if (image_origin.data == NULL) {
-				std::cout << "no image data in " << image_ss << std::endl;
-				break;
+			if (pt_list.size() == 2){
+				pt_list_motion.clear();
+				pt_list_motion.push_back(pt_list[0]);
+				pt_list_motion.push_back(pt_list[1]);
+				pt_list_tracking.clear();
+				pt_list_tracking.push_back(pt_list[0]);
+				pt_list_tracking.push_back(pt_list[1]);
 			}
 
-			trackingFlag = true;
-			ParkingSlotTracking.Run(trackingFlag, image_ss_origin, pt_list_tracking, MotionVec[frameNum].yawrate, MotionVec[frameNum].speed, MotionVec[frameNum].dt, pt_list_corrected);
-			
-			std::vector<cv::Point> pt_motion;
-			Motion.predictPosition(pt_list_motion, MotionVec[frameNum].yawrate, MotionVec[frameNum].speed, MotionVec[frameNum].dt, pt_motion);
-			
-			std::vector<cv::Point> pt_tracking;
-			pt_tracking = ParkingSlotTracking.getCornerpoint();
+			while (pt_list.size() == 2){
 
-			cv::circle(image_origin, pt_tracking[0], 3, cv::Scalar(255, 0, 0), -1);
-			cv::circle(image_origin, pt_tracking[1], 3, cv::Scalar(255, 0, 0), -1);
-			cv::circle(image_origin, pt_motion[0], 3, cv::Scalar(0, 0, 255), -1);
-			cv::circle(image_origin, pt_motion[1], 3, cv::Scalar(0, 0, 255), -1);
-			cv::waitKey(20);
+				frameNum += 1;
 
-			pt_list_motion = pt_motion;
-			pt_list_tracking = pt_tracking;
-			
+				char image_ss[1000];
+				sprintf_s(image_ss, 1000, "D:/git/Parking_Slot_Tracking_cpp/DB/171124/rectified/set%01d/output/labeled/class_1/%08d.jpg", set_num, frameNum);
 
-			cv::imshow("image_test", image_origin);
-			cv::waitKey(20);
+				char image_color[1000];
+				sprintf_s(image_color, 1000, "D:/git/Parking_Slot_Tracking_cpp/DB/171124/rectified/set%01d/images/%08d.jpg", set_num, frameNum);
 
+				cv::Mat image_origin = cv::imread(image_color);
+				cv::Mat image_ss_origin = cv::imread(image_ss, 0);
+
+				if (image_origin.data == NULL) {
+					std::cout << "no image data in " << image_ss << std::endl;
+					break;
+				}
+
+				trackingFlag = true;
+				ParkingSlotTracking.Run(trackingFlag, image_ss_origin, pt_list_tracking, MotionVec[frameNum].yawrate, MotionVec[frameNum].speed, MotionVec[frameNum].dt, pt_list_corrected);
+
+				pt_motion.clear();
+				Motion.predictPosition(pt_list_motion, MotionVec[frameNum].yawrate, MotionVec[frameNum].speed, MotionVec[frameNum].dt, pt_motion);
+
+				std::vector<cv::Point2d> pt_tracking;
+				pt_tracking = ParkingSlotTracking.getCornerpoint();
+
+				cv::circle(image_origin, pt_tracking[0], 3, cv::Scalar(255, 0, 0), -1);
+				cv::circle(image_origin, pt_tracking[1], 3, cv::Scalar(255, 0, 0), -1);
+				cv::circle(image_origin, pt_motion[0], 3, cv::Scalar(0, 0, 255), -1);
+				cv::circle(image_origin, pt_motion[1], 3, cv::Scalar(0, 0, 255), -1);
+				cv::waitKey(20);
+
+				pt_list_motion.clear();
+				pt_list_motion.push_back(pt_motion[0]);
+				pt_list_motion.push_back(pt_motion[1]);
+				pt_list_tracking.clear();
+				pt_list_tracking.push_back(pt_tracking[0]);
+				pt_list_tracking.push_back(pt_tracking[1]);
+
+				cv::imshow("image_test", image_origin);
+				cv::waitKey(20);
+			}
 		}
-
 	}
 }
 
 void getMousepoint(int event, int x, int y, int flags, void* userdata){
 	if (event == cv::EVENT_FLAG_LBUTTON){
-		cv::Point it = cv::Point( x, y );
+		cv::Point2d it = cv::Point2d(x, y);
 		pt_list.push_back(it);
 	}
 	else if(event == cv::EVENT_FLAG_RBUTTON){
