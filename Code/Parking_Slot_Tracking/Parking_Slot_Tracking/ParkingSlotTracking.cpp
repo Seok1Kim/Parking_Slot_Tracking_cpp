@@ -35,9 +35,15 @@ void CParkingSlotTracking::Init()
 
 	m_VehicleCenterX = 245.;
 	m_VehicleCenterY = 118.;
+
+	m_F_matrix = 1. * cv::Mat::eye(4, 4, CV_64F);
+	m_H_matrix = 1. * cv::Mat::eye(4, 4, CV_64F);
+	m_Q_matrix = 1e-6 * cv::Mat::eye(4, 4, CV_64F);
+	m_R_matrix = 1e-4 * cv::Mat::eye(4, 4, CV_64F);
+	m_P_matrix = 1. * cv::Mat::eye(4, 4, CV_64F);
 }
 
-void CParkingSlotTracking::Run(bool trackingFlag, cv::Mat img_src, std::vector<cv::Point2d>pt_list, double yaw_rate, double speed, double dt, std::vector<cv::Point2d>& pt_list_filtered)
+void CParkingSlotTracking::Run(bool trackingFlag, bool filterFlag, cv::Mat img_src, std::vector<cv::Point2d>pt_list, double yaw_rate, double speed, double dt)
 {
 	if (trackingFlag == true){
 		if (templateflag == true){
@@ -54,22 +60,31 @@ void CParkingSlotTracking::Run(bool trackingFlag, cv::Mat img_src, std::vector<c
 		else{
 			if (!predictPosition(m_pt_list_tracking, yaw_rate, speed, dt, m_pt_list_predicted)) m_eErrorCode = ERR_PREDICT;
 			else if (!estimateSpace(m_pt_list_predicted, m_pt_list_estimated)) m_eErrorCode = ERR_ESTIMATE;
-
 			if (!correctPosition(m_pt_list_estimated, m_pt_list_predicted, img_src, img_DT_template, m_pt_list_corrected)){
-				m_pt_list_tracking.clear();
-				m_pt_list_tracking.push_back(m_pt_list_corrected[0]);
-				m_pt_list_tracking.push_back(m_pt_list_corrected[1]);
-			}
-			else{
 				m_pt_list_tracking.clear();
 				m_pt_list_tracking.push_back(m_pt_list_predicted[0]);
 				m_pt_list_tracking.push_back(m_pt_list_predicted[1]);
+			}
+			else{
+				if (filterFlag == true){
+					KalmanFiltering(m_pt_list_predicted, m_pt_list_corrected, m_pt_list_filtered);
+					m_pt_list_tracking.clear();
+					m_pt_list_tracking.push_back(m_pt_list_filtered[0]);
+					m_pt_list_tracking.push_back(m_pt_list_filtered[1]);
+				}
+				else{
+					m_pt_list_tracking.clear();
+					m_pt_list_tracking.push_back(m_pt_list_corrected[0]);
+					m_pt_list_tracking.push_back(m_pt_list_corrected[1]);
+				}
 			}
 		}
 	}
 	else{
 		if (!predictPosition(m_pt_list_tracking, yaw_rate, speed, dt, m_pt_list_predicted)){
-			m_pt_list_tracking = m_pt_list_predicted;
+			m_pt_list_tracking.clear();
+			m_pt_list_tracking.push_back(m_pt_list_predicted[0]);
+			m_pt_list_tracking.push_back(m_pt_list_predicted[1]);
 		}
 	}
 }
@@ -144,24 +159,24 @@ bool CParkingSlotTracking::estimateSpace(std::vector<cv::Point2d> pt_list, std::
 	double rot_y = sin(ang) * unit_x + cos(ang) * unit_y;
 
 	cv::Point2d tmp_pt_list1, tmp_pt_list2;
-	tmp_pt_list1.x = (int)(pt_list[0].x - areaboundary * unit_x);
-	tmp_pt_list1.y = (int)(pt_list[0].y - areaboundary * unit_y);
-	tmp_pt_list2.x = (int)(pt_list[1].x + areaboundary * unit_x);
-	tmp_pt_list2.y = (int)(pt_list[1].y + areaboundary * unit_y);
+	tmp_pt_list1.x = pt_list[0].x - areaboundary * unit_x;
+	tmp_pt_list1.y = pt_list[0].y - areaboundary * unit_y;
+	tmp_pt_list2.x = pt_list[1].x + areaboundary * unit_x;
+	tmp_pt_list2.y = pt_list[1].y + areaboundary * unit_y;
 
 	pt_list_estimated.clear();
 	cv::Point2d tmp_pt_list3, tmp_pt_list4, tmp_pt_list5, tmp_pt_list6;
-	tmp_pt_list3.x = (int)(tmp_pt_list1.x - areaboundary * rot_x);
-	tmp_pt_list3.y = (int)(tmp_pt_list1.y - areaboundary * rot_y);
+	tmp_pt_list3.x = tmp_pt_list1.x - areaboundary * rot_x;
+	tmp_pt_list3.y = tmp_pt_list1.y - areaboundary * rot_y;
 	pt_list_estimated.push_back(tmp_pt_list3);
-	tmp_pt_list4.x = (int)(tmp_pt_list2.x - areaboundary * rot_x);
-	tmp_pt_list4.y = (int)(tmp_pt_list2.y - areaboundary * rot_y);
+	tmp_pt_list4.x = tmp_pt_list2.x - areaboundary * rot_x;
+	tmp_pt_list4.y = tmp_pt_list2.y - areaboundary * rot_y;
 	pt_list_estimated.push_back(tmp_pt_list4);
-	tmp_pt_list5.x = (int)(tmp_pt_list2.x + areaboundary * rot_x);
-	tmp_pt_list5.y = (int)(tmp_pt_list2.y + areaboundary * rot_y);
+	tmp_pt_list5.x = tmp_pt_list2.x + areaboundary * rot_x;
+	tmp_pt_list5.y = tmp_pt_list2.y + areaboundary * rot_y;
 	pt_list_estimated.push_back(tmp_pt_list5);
-	tmp_pt_list6.x = (int)(tmp_pt_list1.x + areaboundary * rot_x);
-	tmp_pt_list6.y = (int)(tmp_pt_list1.y + areaboundary * rot_y);
+	tmp_pt_list6.x = tmp_pt_list1.x + areaboundary * rot_x;
+	tmp_pt_list6.y = tmp_pt_list1.y + areaboundary * rot_y;
 	pt_list_estimated.push_back(tmp_pt_list6);
 
 	return true;
@@ -327,23 +342,23 @@ bool CParkingSlotTracking::getDisturbancePoints(std::vector<cv::Point2d> pt_list
 	
 	double ang_dis = ang_disturbance / 180. * M_PI;
 	
-	int tmp_point1_x = pt_list_predicted[0].x + x_disturbance;
-	int tmp_point1_y = pt_list_predicted[0].y + y_disturbance;
-	int tmp_point2_x = pt_list_predicted[1].x + x_disturbance;
-	int tmp_point2_y = pt_list_predicted[1].y + y_disturbance;
+	double tmp_point1_x = pt_list_predicted[0].x + (double)x_disturbance;
+	double tmp_point1_y = pt_list_predicted[0].y + (double)y_disturbance;
+	double tmp_point2_x = pt_list_predicted[1].x + (double)x_disturbance;
+	double tmp_point2_y = pt_list_predicted[1].y + (double)y_disturbance;
 		
-	int tmp_point_centerx = (tmp_point1_x + tmp_point2_x) / 2;
-	int tmp_point_centery = (tmp_point1_y + tmp_point2_y) / 2;
+	double tmp_point_centerx = (tmp_point1_x + tmp_point2_x) / 2;
+	double tmp_point_centery = (tmp_point1_y + tmp_point2_y) / 2;
 
 	tmp_point1_x = tmp_point1_x - tmp_point_centerx;
 	tmp_point1_y = tmp_point1_y - tmp_point_centery;
 	tmp_point2_x = tmp_point2_x - tmp_point_centerx;
 	tmp_point2_y = tmp_point2_y - tmp_point_centery;
 
-	int tmp_rot_point1_x = (int)(cos(ang_dis) * (double)tmp_point1_x - sin(ang_dis) * (double)tmp_point1_y);
-	int tmp_rot_point1_y = (int)(sin(ang_dis) * (double)tmp_point1_x + cos(ang_dis) * (double)tmp_point1_y);
-	int tmp_rot_point2_x = (int)(cos(ang_dis) * (double)tmp_point2_x - sin(ang_dis) * (double)tmp_point2_y);
-	int tmp_rot_point2_y = (int)(sin(ang_dis) * (double)tmp_point2_x + cos(ang_dis) * (double)tmp_point2_y);
+	double tmp_rot_point1_x = cos(ang_dis) * tmp_point1_x - sin(ang_dis) * tmp_point1_y;
+	double tmp_rot_point1_y = sin(ang_dis) * tmp_point1_x + cos(ang_dis) * tmp_point1_y;
+	double tmp_rot_point2_x = cos(ang_dis) * tmp_point2_x - sin(ang_dis) * tmp_point2_y;
+	double tmp_rot_point2_y = sin(ang_dis) * tmp_point2_x + cos(ang_dis) * tmp_point2_y;
 
 	tmp_point1_x = tmp_rot_point1_x + tmp_point_centerx;
 	tmp_point1_y = tmp_rot_point1_y + tmp_point_centery;
@@ -363,8 +378,28 @@ bool CParkingSlotTracking::getDisturbancePoints(std::vector<cv::Point2d> pt_list
 
 	return true;
 }
-bool CParkingSlotTracking::KalmanFiltering(std::vector<cv::Point2d> pt_list_corrected, std::vector<cv::Point2d>& pt_list_filtered){
+bool CParkingSlotTracking::KalmanFiltering(std::vector<cv::Point2d> pt_list_predicted, std::vector<cv::Point2d> pt_list_corrected, std::vector<cv::Point2d>& pt_list_filtered){
+	cv::Mat mat_pt_corrected = (cv::Mat_<double>(4, 1) << pt_list_corrected[0].x, pt_list_corrected[0].y, pt_list_corrected[1].x, pt_list_corrected[1].y );
+	cv::Mat mat_pt_predicted = (cv::Mat_<double>(4, 1) << pt_list_predicted[0].x, pt_list_predicted[0].y, pt_list_predicted[1].x, pt_list_predicted[1].y);
 
+	cv::Mat P_priori_matrix = m_F_matrix * m_P_matrix * m_F_matrix.t() + m_Q_matrix;
+	cv::Mat K_matrix = P_priori_matrix * m_H_matrix.t() * (m_H_matrix * P_priori_matrix * m_H_matrix.t() + m_R_matrix).inv();
+
+	cv::Mat state_priori_matrix = m_F_matrix * mat_pt_predicted;
+	cv::Mat state_posteriori_matrix = state_priori_matrix + K_matrix *(mat_pt_corrected - m_H_matrix * state_priori_matrix);
+	m_P_matrix = P_priori_matrix - K_matrix * m_H_matrix * P_priori_matrix;
+
+	cv::Point2d tmp_point1;
+	tmp_point1.x = state_posteriori_matrix.at<double>(0, 0);
+	tmp_point1.y = state_posteriori_matrix.at<double>(1, 0);
+	cv::Point2d tmp_point2;
+	tmp_point2.x = state_posteriori_matrix.at<double>(2, 0);
+	tmp_point2.y = state_posteriori_matrix.at<double>(3, 0);
+
+	pt_list_filtered.clear();
+	pt_list_filtered.push_back(tmp_point1);
+	pt_list_filtered.push_back(tmp_point2);
+	
 	return true;
 }
 
@@ -378,9 +413,5 @@ std::vector<cv::Point2d> CParkingSlotTracking::getCornerpoint(void){
 	return m_pt_list_tracking;
 }
 
-void CParkingSlotTracking::asdt()
-{
-
-}
 
 // ===========================================================================

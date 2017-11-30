@@ -18,7 +18,7 @@ public:
 public:
 	// Task
 	void Init(); // initialization
-	void Run(bool trackingFlag, cv::Mat img_src, std::vector<cv::Point2d>pt_list, double yaw_rate, double speed, double dt, std::vector<cv::Point2d>& pt_list_filtered);
+	void CParkingSlotTracking::Run(bool trackingFlag, bool filterFlag, cv::Mat img_src, std::vector<cv::Point2d>pt_list, double yaw_rate, double speed, double dt);
 	bool CParkingSlotTracking::predictPosition(std::vector<cv::Point2d>pt_list, double yaw_rate, double speed, double dt, std::vector<cv::Point2d>& pt_list_dst);
 	void Terminate(); // termination
 	// ===========================================================================
@@ -32,10 +32,11 @@ private:
 	eOGF_Error_type					m_eErrorCode;
 	bool							templateflag;
 	double							m_XPixelMeter;
-	std::vector<cv::Point2d>			m_pt_list_predicted;
-	std::vector<cv::Point2d>			m_pt_list_estimated;
-	std::vector<cv::Point2d>			m_pt_list_corrected;
-	std::vector<cv::Point2d>			m_pt_list_tracking;
+	std::vector<cv::Point2d>		m_pt_list_predicted;
+	std::vector<cv::Point2d>		m_pt_list_estimated;
+	std::vector<cv::Point2d>		m_pt_list_corrected;
+	std::vector<cv::Point2d>		m_pt_list_tracking;
+	std::vector<cv::Point2d>		m_pt_list_filtered;
 	cv::Mat							img_cropped_template;
 	std::vector<cv::Mat>			img_DT_template;
 	double							m_VehicleCenterX;
@@ -47,6 +48,12 @@ private:
 	int								m_disturbanceX;
 	int								m_disturbanceY;
 	int								m_disturbanceANG;
+
+	cv::Mat							m_F_matrix;
+	cv::Mat							m_H_matrix;
+	cv::Mat							m_Q_matrix;
+	cv::Mat							m_R_matrix;
+	cv::Mat							m_P_matrix;
 
 	// ===========================================================================
 
@@ -60,7 +67,7 @@ private:
 	bool CParkingSlotTracking::calculateDT(cv::Mat img_cropped, std::vector<cv::Mat>& img_DT);
 	bool CParkingSlotTracking::getDisturbancePoints(std::vector<cv::Point2d> pt_list_predicted, std::vector<cv::Point2d>& pt_list_disturbance, int x_disturbance, int y_disturbance, int ang_disturbance);
 	bool CParkingSlotTracking::correctPosition(std::vector<cv::Point2d> pt_list_src, std::vector<cv::Point2d> pt_list_predicted, cv::Mat img_src_ss, std::vector<cv::Mat> img_template_DT, std::vector<cv::Point2d>& pt_list_corrected);
-	bool CParkingSlotTracking::KalmanFiltering(std::vector<cv::Point2d> pt_list_corrected, std::vector<cv::Point2d>& pt_list_filtered);
+	bool CParkingSlotTracking::KalmanFiltering(std::vector<cv::Point2d> pt_list_predicted, std::vector<cv::Point2d> pt_list_corrected, std::vector<cv::Point2d>& pt_list_filtered);
 
 	// ===========================================================================
 
@@ -69,6 +76,5 @@ public:
 	// External interfaces
 	// ---------------------------------------------------------------------------
 	std::vector<cv::Point2d> getCornerpoint(void);
-	void asdt();
 	// ===========================================================================
 };

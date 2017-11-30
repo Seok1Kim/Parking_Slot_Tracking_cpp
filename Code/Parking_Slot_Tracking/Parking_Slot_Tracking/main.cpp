@@ -9,16 +9,16 @@
 
 int start_frame[8] = {107, 63, 96, 82, 50, 111, 81, 100};
 
-int set_num = 1;
+int set_num = 4;
 std::string str_set_num = std::to_string(set_num);
 
 std::vector<cv::Point2d> pt_list;
 std::vector<cv::Point2d> pt_list_motion;
-std::vector<cv::Point2d> pt_motion;
 std::vector<cv::Point2d> pt_list_tracking;
-std::vector<cv::Point2d> pt_list_corrected;
+std::vector<cv::Point2d> pt_list_nofilter;
 
 bool trackingFlag = false;
+bool filterFlag = false;
 
 typedef struct{
 	double dt;
@@ -67,6 +67,7 @@ int main(int argc, char *argv[], char *envp[]){
 	cv::setMouseCallback("image", getMousepoint, NULL);
 
 	CParkingSlotTracking ParkingSlotTracking;
+	CParkingSlotTracking ParkingSlotTracking_nofilter;
 	CParkingSlotTracking Motion;
 
 	char image_ss[1000];
@@ -102,10 +103,13 @@ int main(int argc, char *argv[], char *envp[]){
 				pt_list_tracking.clear();
 				pt_list_tracking.push_back(pt_list[0]);
 				pt_list_tracking.push_back(pt_list[1]);
+				pt_list_nofilter.clear();
+				pt_list_nofilter.push_back(pt_list[0]);
+				pt_list_nofilter.push_back(pt_list[1]);
 			}
 
 			while (pt_list.size() == 2){
-
+				
 				frameNum += 1;
 
 				char image_ss[1000];
@@ -123,20 +127,33 @@ int main(int argc, char *argv[], char *envp[]){
 				}
 
 				trackingFlag = true;
-				ParkingSlotTracking.Run(trackingFlag, image_ss_origin, pt_list_tracking, MotionVec[frameNum].yawrate, MotionVec[frameNum].speed, MotionVec[frameNum].dt, pt_list_corrected);
-
-				pt_motion.clear();
-				Motion.predictPosition(pt_list_motion, MotionVec[frameNum].yawrate, MotionVec[frameNum].speed, MotionVec[frameNum].dt, pt_motion);
+				filterFlag = true;
+				int64 e1 = cv::getTickCount();
+				ParkingSlotTracking.Run(trackingFlag, filterFlag, image_ss_origin, pt_list_tracking, MotionVec[frameNum].yawrate, MotionVec[frameNum].speed, MotionVec[frameNum].dt);
+				int64 e2 = cv::getTickCount();
+				double time = (double)(e2 - e1) / cv::getTickFrequency();
+				std::cout << time << std::endl;
 
 				std::vector<cv::Point2d> pt_tracking;
 				pt_tracking = ParkingSlotTracking.getCornerpoint();
 
+				trackingFlag = true;
+				filterFlag = false;
+				ParkingSlotTracking_nofilter.Run(trackingFlag, filterFlag, image_ss_origin, pt_list_nofilter, MotionVec[frameNum].yawrate, MotionVec[frameNum].speed, MotionVec[frameNum].dt);
+				
+				std::vector<cv::Point2d> pt_nofilter;
+				pt_nofilter = ParkingSlotTracking_nofilter.getCornerpoint();
+
+				std::vector<cv::Point2d> pt_motion;
+				Motion.predictPosition(pt_list_motion, MotionVec[frameNum].yawrate, MotionVec[frameNum].speed, MotionVec[frameNum].dt, pt_motion);
+
+				cv::circle(image_origin, pt_nofilter[0], 3, cv::Scalar(0, 255, 0), -1);
+				cv::circle(image_origin, pt_nofilter[1], 3, cv::Scalar(0, 255, 0), -1);
 				cv::circle(image_origin, pt_tracking[0], 3, cv::Scalar(255, 0, 0), -1);
 				cv::circle(image_origin, pt_tracking[1], 3, cv::Scalar(255, 0, 0), -1);
 				cv::circle(image_origin, pt_motion[0], 3, cv::Scalar(0, 0, 255), -1);
 				cv::circle(image_origin, pt_motion[1], 3, cv::Scalar(0, 0, 255), -1);
-				cv::waitKey(20);
-
+				
 				pt_list_motion.clear();
 				pt_list_motion.push_back(pt_motion[0]);
 				pt_list_motion.push_back(pt_motion[1]);
@@ -145,9 +162,11 @@ int main(int argc, char *argv[], char *envp[]){
 				pt_list_tracking.push_back(pt_tracking[1]);
 
 				cv::imshow("image_test", image_origin);
-				cv::waitKey(20);
+				cv::waitKey(1);
+
 			}
 		}
+
 	}
 }
 
