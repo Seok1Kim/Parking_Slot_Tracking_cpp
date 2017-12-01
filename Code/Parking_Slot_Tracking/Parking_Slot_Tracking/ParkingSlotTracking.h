@@ -54,6 +54,7 @@ private:
 	cv::Mat							m_Q_matrix;
 	cv::Mat							m_R_matrix;
 	cv::Mat							m_P_matrix;
+	cv::Mat							m_debug;
 
 	// ===========================================================================
 

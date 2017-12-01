@@ -15,7 +15,7 @@ CParkingSlotTracking::CParkingSlotTracking(void)
 	m_XPixelMeter(0.),
 	m_CropImageSizeX(0),
 	m_CropImageSizeY(0),
-	m_ResizeScale(0.5),
+	m_ResizeScale(0.3),
 	m_ThresholdImage(245),
 	m_disturbanceX(2),
 	m_disturbanceY(2),
@@ -129,23 +129,8 @@ bool CParkingSlotTracking::estimateSpace(std::vector<cv::Point2d> pt_list, std::
 		return false;
 	}
 	
-	// arrange pt_list
-	cv::Point2d tmp_pt_list;
-	if (pt_list[0].x > pt_list[1].x){
-		tmp_pt_list = pt_list[0];
-		pt_list[0] = pt_list[1];
-		pt_list[1] = tmp_pt_list;
-	}
-	else if (pt_list[0].x == pt_list[1].x){
-		if (pt_list[0].y > pt_list[1].y){
-			tmp_pt_list = pt_list[0];
-			pt_list[0] = pt_list[1];
-			pt_list[1] = tmp_pt_list;
-		}
-	}
-
-	double ang = (-90.) / 180. * M_PI;
-	double areaboundary = 20.;
+	double ang = 90. / 180. * M_PI;
+	double areaboundary = 25.;
 
 	double dx = (double)pt_list[1].x - (double)pt_list[0].x;
 	double dy = (double)pt_list[1].y - (double)pt_list[0].y;
@@ -197,10 +182,10 @@ bool CParkingSlotTracking::cropImage(cv::Mat img_src_ss, cv::Mat& img_cropped, s
 		pt_i[3] = cv::Point2f(pt_list_estimated[3].x, pt_list_estimated[3].y);
 
 		cv::Point2f pt_b[4];
-		pt_b[0] = cv::Point2f(0,					m_CropImageSizeY);
-		pt_b[1] = cv::Point2f(m_CropImageSizeX,		m_CropImageSizeY);
-		pt_b[2] = cv::Point2f(m_CropImageSizeX,     0				);
-		pt_b[3] = cv::Point2f(0,					0				);
+		pt_b[0] = cv::Point2f(m_CropImageSizeX,		m_CropImageSizeY);
+		pt_b[1] = cv::Point2f(0,					m_CropImageSizeY);
+		pt_b[2] = cv::Point2f(0,					0				);
+		pt_b[3] = cv::Point2f(m_CropImageSizeX,     0				);
 		
 		cv::Mat Trans_mat = cv::getPerspectiveTransform(pt_i, pt_b);
 
@@ -214,9 +199,8 @@ bool CParkingSlotTracking::cropImage(cv::Mat img_src_ss, cv::Mat& img_cropped, s
 
 		img_perspective.copyTo(img_cropped, mask_thresholding); 
 		
-		cv::imshow("test", img_cropped);
-		cv::waitKey(100);
-		int a = 1;
+		cv::imshow("test", img_perspective);
+		cv::waitKey(1);
 	}
 	else{
 		cv::Point2f pt_i[4];
@@ -226,10 +210,10 @@ bool CParkingSlotTracking::cropImage(cv::Mat img_src_ss, cv::Mat& img_cropped, s
 		pt_i[3] = cv::Point2f(pt_list_estimated[3].x, pt_list_estimated[3].y);
 
 		cv::Point2f pt_b[4];
-		pt_b[0] = cv::Point2f(0, m_CropImageSizeY);
-		pt_b[1] = cv::Point2f(m_CropImageSizeX, m_CropImageSizeY);
-		pt_b[2] = cv::Point2f(m_CropImageSizeX, 0);
-		pt_b[3] = cv::Point2f(0, 0);
+		pt_b[0] = cv::Point2f(m_CropImageSizeX, m_CropImageSizeY);
+		pt_b[1] = cv::Point2f(0, m_CropImageSizeY);
+		pt_b[2] = cv::Point2f(0, 0);
+		pt_b[3] = cv::Point2f(m_CropImageSizeX, 0);
 
 		cv::Mat Trans_mat = cv::getPerspectiveTransform(pt_i, pt_b);
 
@@ -242,6 +226,9 @@ bool CParkingSlotTracking::cropImage(cv::Mat img_src_ss, cv::Mat& img_cropped, s
 		cv::inRange(img_perspective, cv::Scalar(m_ThresholdImage), cv::Scalar(255), mask_thresholding);
 
 		img_perspective.copyTo(img_cropped, mask_thresholding);
+		
+		m_debug = cv::Scalar(0.0);
+		img_cropped.copyTo(m_debug);
 	}
 
 	return true;
@@ -333,6 +320,8 @@ bool CParkingSlotTracking::correctPosition(std::vector<cv::Point2d> pt_list_src,
 		}
 	}
 	int index_min_cost = std::min_element(arr_cost.begin(), arr_cost.end()) - arr_cost.begin();
+	
+	cv::imshow("debug", m_debug);
 
 	pt_list_corrected = tmp_point_disturbance[index_min_cost];
 	
