@@ -254,7 +254,7 @@ bool CParkingSlotTracking::calculateDT(cv::Mat img_cropped, std::vector<cv::Mat>
 	cv::threshold(img_sobel_xpos, img_sobel_xpos, m_ThresholdImage, 255, CV_THRESH_BINARY_INV);
 	cv::threshold(img_sobel_ypos, img_sobel_ypos, m_ThresholdImage, 255, CV_THRESH_BINARY_INV);
 	cv::threshold(img_sobel_xneg, img_sobel_xneg, m_ThresholdImage, 255, CV_THRESH_BINARY_INV);
-	cv::threshold(img_sobel_xneg, img_sobel_xneg, m_ThresholdImage, 255, CV_THRESH_BINARY_INV);
+	cv::threshold(img_sobel_yneg, img_sobel_yneg, m_ThresholdImage, 255, CV_THRESH_BINARY_INV);
 
 	cv::Mat img_DT_xpos, img_DT_ypos, img_DT_xneg, img_DT_yneg;
 	cv::distanceTransform(img_sobel_xpos, img_DT_xpos, CV_DIST_L2, 3);
